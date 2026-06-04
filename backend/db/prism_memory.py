@@ -17,12 +17,30 @@ class OutcomeEntry(BaseModel):
 
 class UserProfile(BaseModel):
     user_id: str
+    communication_style: str = "direct"
+    emotional_vocabulary_level: str = "high"
     active_concerns: List[str] = []
     active_patterns: Dict[str, UserPattern] = {}
     outcome_history: Dict[str, OutcomeEntry] = {}
+
+    # v2.0 Additions: Temporal & Emotional Trajectory
+    peak_engagement_hour: Optional[int] = None
+    session_frequency_days: float = 0.0
+    longest_streak: int = 0
+    mood_trend_7d: str = "stable"  # improving, stable, declining
+    last_positive_session: Optional[datetime] = None
+
+    # Intervention History
+    interventions_offered: List[Dict[str, Any]] = []
+    ignored_nudges: List[str] = []
+
+    # Cross-module correlations
+    sleep_mood_correlation: float = 0.0
+    habit_dropout_day: Optional[int] = None
+
     privacy_settings: Dict[str, Any] = {
         "allow_historical_patterns": True,
-        "consent_depth": "recent" 
+        "consent_depth": "recent"
     }
     preferences: Dict[str, Any] = {
         "intervention_style": "supportive",
@@ -30,6 +48,7 @@ class UserProfile(BaseModel):
         "checkin_enabled": True
     }
     last_updated: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
 
 async def get_prism_profile(user_id: str) -> Optional[UserProfile]:
     """Fetches the PRISM-Lite profile for a user."""

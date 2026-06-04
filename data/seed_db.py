@@ -17,6 +17,7 @@ USER_ID = "demo_user_001"
 async def seed():
     uri = MONGODB_URI
     print(f"Connecting to MongoDB Atlas cluster...")
+    # Added tlsAllowInvalidCertificates=True as an emergency fix
     client = motor.motor_asyncio.AsyncIOMotorClient(
         uri, 
         tlsCAFile=certifi.where(),

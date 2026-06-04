@@ -1,9 +1,11 @@
-from fastapi import FastAPI, Body
+from fastapi import FastAPI, Body, BackgroundTasks
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from db.mongodb import MongoDB
 from core.config import get_settings
 from graph.workflow import companion_orchestrator
 from scheduler.checkin_scheduler import setup_scheduler
+from graph.crisis import crisis_pre_filter
 
 settings = get_settings()
 
@@ -16,17 +18,23 @@ async def lifespan(app: FastAPI):
     app.state.scheduler.shutdown()
 
 app = FastAPI(
-    title="MindMate AI API",
-    description="The central intelligence orchestrator for mental health wellness modules.",
-    version="1.0.0",
+    title="MindMate AI v2.0",
+    description="Production-hardened intelligence orchestrator for mental health.",
+    version="2.0.0",
     lifespan=lifespan
 )
 
 @app.post("/chat")
-async def chat(user_id: str = Body(...), message: str = Body(...)):
+async def chat(background_tasks: BackgroundTasks, user_id: str = Body(...), message: str = Body(...)):
     """
-    Main endpoint to interact with the AI Companion.
+    Enhanced endpoint with N0: Crisis Pre-filter and Async Memory Updates.
     """
+    # 1. N0: Crisis Pre-filter (Sub-millisecond regex scan)
+    crisis_response = crisis_pre_filter(message)
+    if crisis_response:
+        background_tasks.add_task(log_crisis_event, user_id, message)
+        return {"response": crisis_response, "intent": "crisis", "risk": "crisis"}
+
     initial_state = {
         "user_id": user_id,
         "message": message,
@@ -34,7 +42,11 @@ async def chat(user_id: str = Body(...), message: str = Body(...)):
         "detected_patterns": [] 
     }
     
+    # 2. Invoke the Orchestrator
     result = await companion_orchestrator.ainvoke(initial_state)
+    
+    # 3. N7: Async Memory Updater (Decoupled from response latency)
+    background_tasks.add_task(async_memory_updater, user_id, result)
     
     return {
         "response": result.get("response"),
@@ -42,6 +54,31 @@ async def chat(user_id: str = Body(...), message: str = Body(...)):
         "patterns": result.get("detected_patterns"),
         "recommendation": result.get("recommendation")
     }
+
+async def log_crisis_event(user_id: str, message: str):
+    db = MongoDB.db
+    if db is not None:
+        await db.crisis_logs.insert_one({
+            "user_id": user_id,
+            "message": message,
+            "timestamp": datetime.now(timezone.utc)
+        })
+
+async def async_memory_updater(user_id: str, result: dict):
+    """Handles PRISM-Lite and Vector Memory updates in background."""
+    from db.prism_memory import update_pattern
+    from memory.prism_vector import vector_memory
+    
+    category = result.get("intent_category")
+    if category and category != "general_chat":
+        await update_pattern(user_id, category)
+        
+    # Update semantic ChromaDB memory
+    vector_memory.add_memory(
+        user_id, 
+        result.get("message", ""), 
+        {"intent": category, "timestamp": str(datetime.now(timezone.utc))}
+    )
 
 @app.get("/profile/{user_id}")
 async def get_profile(user_id: str):

@@ -1,14 +1,15 @@
 # MindMate AI: Proactive Mental Health Companion
 
-MindMate AI is a production-grade AI Companion Orchestrator designed to unify isolated wellness modules (Mood, Habits, Journals, etc.) into an intelligent, personalized layer. It uses **LangGraph** for explicit reasoning and **PRISM-Lite** for longitudinal memory.
+MindMate AI is a production-grade AI Companion Orchestrator designed to unify isolated wellness modules (Mood, Habits, Journals, etc.) into an intelligent, personalized layer. It leverages **LangGraph** for explicit reasoning, **ChromaDB** for semantic recall, and **PRISM-Lite** for longitudinal memory.
 
 ## 🚀 Key Features
 
-*   **Stateful Reasoning (LangGraph):** Moves beyond simple LLM chains to a node-based architecture that handles Classification, Risk Analysis, and Tool Execution.
-*   **Longitudinal Memory (PRISM-Lite):** Learns user patterns over time (e.g., recurring sleep issues) and stores them as structured intelligence in MongoDB.
+*   **Stateful Orchestration (LangGraph):** Moves beyond simple LLM chains to a node-based architecture that handles Intent Classification, Risk Analysis, and Tool Execution through a persistent state.
+*   **Semantic Memory (ChromaDB):** Implements semantic recall to recognize paraphrased past concerns (e.g., "racing mind at 2 AM" vs "can't sleep"), solving the limitations of keyword-based search.
+*   **Longitudinal Intelligence (PRISM-Lite):** Learns behavioral patterns over time and stores them as structured intelligence in MongoDB to enable true personalization.
+*   **Zero-Latency Safety Shield:** A hardcoded pre-filter that scans for 12 critical crisis phrases to provide instant, guaranteed clinical resources without waiting for LLM reasoning.
 *   **Hybrid Proactivity:** Initiates conversations based on background data triggers (e.g., abandoned habits) or real-time mood dips, always respecting user consent.
-*   **Clinical Safety:** Implements a specialized generator node that ensures responses are empathetic, supportive, and strictly **non-diagnostic**.
-*   **Real-time Intelligence Dashboard:** A dual-pane UI showing the AI's internal "Pattern Bank" alongside the chat.
+*   **Real-time Intelligence Dashboard:** A dual-pane UI that visualizes the AI's internal "Pattern Bank" alongside current wellness data and habit streaks.
 
 ## 📸 Visual Walkthrough
 
@@ -16,10 +17,10 @@ MindMate AI is a production-grade AI Companion Orchestrator designed to unify is
 The dashboard provides a "Glass Box" view of the AI's reasoning, displaying detected longitudinal patterns, habit streaks, and mood history in real-time.
 
 ![MindMate Dashboard](src/webpage_1.png)
-*Initial view showing PRISM-Lite patterns and empty wellness logs.*
+*Initial view showing PRISM-Lite patterns and wellness logs.*
 
 ![MindMate Interaction](src/webpage_3.png)
-*Active conversation showing pattern detection and bar-chart mood visualization.*
+*Active conversation showing semantic pattern detection and bar-chart mood visualization.*
 
 ### 2. Backend Orchestration
 Witness the "Brain" in action. The terminal logs show how LangGraph moves through Classification, Memory Retrieval, and Tool Execution nodes for every message.
@@ -31,6 +32,7 @@ Witness the "Brain" in action. The terminal logs show how LangGraph moves throug
 
 *   **Agent Framework:** LangGraph + LangChain
 *   **LLM:** NVIDIA LLaMA 3.3 70B Instruct
+*   **Vector DB:** ChromaDB (for Semantic Recall)
 *   **Backend:** FastAPI + MongoDB (Motor)
 *   **Frontend:** Streamlit
 *   **Observability:** LangSmith
@@ -42,7 +44,6 @@ Witness the "Brain" in action. The terminal logs show how LangGraph moves throug
 *   Python 3.10+
 *   MongoDB (Local or Atlas)
 *   NVIDIA Developer API Key
-*   LangSmith API Key (Optional for tracing)
 
 ### 2. Setup
 ```bash
@@ -75,10 +76,11 @@ streamlit run streamlit_app.py
 ```
 
 ## 🧠 Architecture Deep-Dive
-For detailed technical information on the LangGraph nodes, PRISM-Lite schemas, and the normalization layer, please refer to:
+For detailed technical information on the reasoning nodes, memory schemas, and the normalization layer, please refer to:
 *   `docs/architecture.md`
 *   `docs/technical_specs.md`
-*   `docs/technical_explanation.md` (Code-level walkthrough)
+*   `docs/technical_explanation.md` (Presentation strategy)
+*   `docs/manual_test_guide.md` (Scenario walkthroughs)
 
 ## ⚖️ Safety & Ethics
-MindMate AI follows the "Safety-First" principle. No clinical message reaches the user without passing through the Risk Classification and Clinical Persona nodes. It is designed to complement, not replace, professional therapy.
+MindMate AI follows a "Safety-First" architecture. All user inputs pass through a Zero-Latency Crisis Pre-filter and a dedicated Safety node. The system is designed to complement professional therapy, not replace it, and includes explicit human-escalation pathways for genuine crises.

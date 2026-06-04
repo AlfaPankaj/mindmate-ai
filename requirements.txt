@@ -14,5 +14,7 @@ pandas
 motor
 dnspython
 certifi
+chromadb
+sentence-transformers
 pybreaker
 pytz
