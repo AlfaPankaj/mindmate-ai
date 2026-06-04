@@ -10,8 +10,6 @@ class MongoDB:
 
     @classmethod
     async def connect_to_storage(cls):
-        # The Port error usually happens when special characters in password aren't handled.
-        # Motor/PyMongo handles the URI string directly.
         uri = settings.MONGODB_URI
         cls.client = motor.motor_asyncio.AsyncIOMotorClient(
             uri, 
