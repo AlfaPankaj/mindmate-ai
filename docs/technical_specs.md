@@ -1,77 +1,69 @@
 # MindMate AI: Technical Deep-Dive & Workflow Specifications
 
-This document provides a granular technical explanation of the core systems powering MindMate AI, specifically focusing on the **LangGraph Orchestration** and the **PRISM-Lite Memory** architecture.
+This document provides a granular technical explanation of the production-hardened systems powering MindMate AI.
 
 ---
 
 ## 1. LangGraph: The Orchestration Engine
 
-MindMate uses **LangGraph** to move beyond linear LLM chains. It treats the AI's "thought process" as a stateful, cyclic graph.
+MindMate uses a stateful, cyclic graph with 8 nodes to move beyond linear LLM chains.
 
-### 1.1 The State Object
-The entire graph shares a `CompanionState` object, which is passed from node to node:
+### 1.1 Node Execution Workflow (The v2.0 Pipeline)
+1.  **N0: Crisis Pre-filter:** Sub-millisecond regex scan for 12 hard crisis phrases. Bypasses the graph if matched.
+2.  **N1: Input Classifier:** Computes a **Distress Score (0.0-1.0)** and identifies intent (sleep, habit, etc.).
+3.  **N2: Memory Retrieval:** Fetches the structured MongoDB profile + **ChromaDB Semantic Memories**.
+4.  **N3: Pattern Detection:** Cross-module correlation (Mood <-> Habit) and semantic pattern matching.
+5.  **N4: Recommendation Planner:** Deterministic decision using the **Readiness Matrix formula**.
+6.  **N5: Tool Execution:** Orchestrates DB writes to normalized wellness modules (Habits, Moods).
+7.  **N6: Safety-Guarded Generator:** Enforces a strictly supportive, non-diagnostic persona.
+8.  **N7: Async Memory Updater:** Updates PRISM-Lite and Vector stores via **FastAPI BackgroundTasks**.
+
+### 1.2 The State Object
 ```python
 class CompanionState(TypedDict):
     user_id: str
-    message: str            # Current user input
-    profile: dict           # PRISM-Lite data (Consent-aware)
-    module_data: dict       # Normalized data from Habit/Mood/Journal modules
-    intent_category: str    # e.g., "sleep_issue", "crisis"
-    detected_patterns: list # Recurring issues found in this session
-    recommendation: dict    # The chosen tool/action (Weighted by past outcomes)
-    response: str           # Final string sent to user
-    safety_flag: bool       # Set by the Hybrid Safety Node
+    message: str
+    profile: dict           # Fetched in N2
+    module_data: dict       # Fetched in N2 (includes Semantic Recall)
+    intent_category: str    # Set in N1
+    distress_score: float   # Computed in N1
+    detected_patterns: list # Set in N3
+    recommendation: dict    # Planned in N4
+    response: str           # Generated in N6
 ```
-
-### 1.2 Node-by-Node Execution Workflow
-1.  **Input Classifier Node:** Categorizes input. If keyword-matched for risk, flags for `Hybrid Safety Node`.
-2.  **Memory & State Retrieval Node:**
-    *   *Action:* Queries MongoDB for user profile and **normalized** module data.
-    *   *Consent Filter:* Only fetches memories matching the user's current `consent_depth` (Recent vs. Historical).
-3.  **Pattern Detection Node:** Compares normalized data across silos to find cross-module trends.
-4.  **Recommendation & Tool Node:**
-    *   *Logic:* Scores actions based on `Pattern Strength` + `Outcome History` (e.g., if user hated breathing exercises last time, it suggests journaling instead).
-5.  **Hybrid Safety Node:**
-    *   *Double Check:* Rule-based screening + lightweight LLM verification pass to reduce false positives.
-6.  **Memory Update Node:** Stores the interaction and **tracks recommendation outcomes** (e.g., "Did the user click the exercise?").
 
 ---
 
-## 2. PRISM-Lite: The Memory & Learning System
+## 2. PRISM-Lite: Longitudinal Memory
 
-### 2.1 Storage Structure (MongoDB)
+The **User Intent Vector (UIV)** stores the "Long-term Intelligence" in MongoDB.
+
+### 2.1 Enriched UIV Schema
 ```json
 {
   "user_id": "u123",
-  "privacy_settings": {"allow_historical_patterns": true},
-  "outcome_history": {
-    "breathing_exercise": {"score": -1, "last_used": "2026-06-01"},
-    "journal_prompt": {"score": 2, "last_used": "2026-06-02"}
+  "active_patterns": {
+    "sleep_difficulty": {"evidence_count": 4, "last_seen": "2026-06-03"}
   },
-  "active_patterns": {...}
+  "emotional_trajectory": {
+    "mood_trend_7d": "declining",
+    "last_positive_session": "2026-05-28"
+  },
+  "temporal_patterns": {
+    "peak_engagement_hour": 21
+  }
 }
 ```
 
 ---
 
-## 3. Hybrid Proactivity Workflow
-
-### 3.1 Adaptive Scheduler
-The scheduler (APScheduler) implements a **Response-Based Cooldown**:
-*   *If Proactive Check-in was Acted Upon:* Interval remains 24h or decreases slightly.
-*   *If Proactive Check-in was Ignored:* Interval increases to 36h-48h to prevent fatigue.
+## 3. Semantic Store (ChromaDB)
+MindMate implements **Semantic Recall** to solve the keyword gap.
+*   **Ingestion:** Key user messages are embedded and stored with `user_id` and `timestamp` metadata.
+*   **Retrieval:** In Node N2, we run a **Cosine Similarity Search** using the current user's message to find similar past distress or wellness events within a 14-day window.
 
 ---
 
-## 4. Normalization Layer (The "Data Silo" Bridge)
-To handle inconsistent inputs from isolated modules, MindMate implements a `normalization_service`:
-*   *Mood:* Maps 1-5 or 1-10 scales to a standard 0.0-1.0 float.
-*   *Timestamps:* Forces all module data into UTC ISO8601.
-*   *Enums:* Standardizes "Sad", "Low", "Upset" into a single `mood_category`.
-
----
-
-## 5. Value Proposition for Zenark
-*   **For Users:** It feels like the AI "knows" them. It doesn't repeat advice they've already ignored.
-*   **For Clinicians:** The system provides a "Memory Dashboard" that summarizes user patterns, saving doctors hours of manual review.
-*   **Technical Edge:** By using LangGraph, we solve the "State Explosion" problem of complex AI agents, making the system predictable and scalable.
+## 4. Normalization & Graceful Degradation
+*   **Normalization Layer:** All wellness modules (Habits, Moods) pass through a schema validator to ensure integers, floats, and strings are standardized before they reach the Pattern node.
+*   **Circuit Breakers:** If the Habit module API is unreachable, the orchestrator defaults to a cached profile state, ensuring the AI never crashes during a demo.

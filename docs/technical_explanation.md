@@ -1,84 +1,78 @@
 # MindMate AI: Technical Explanation & Interview Guide
 
-This document provides a detailed walkthrough of the codebase and a strategy for presenting this system to the Zenark engineering team.
+This document provides a granular walkthrough of the production-hardened features of MindMate AI.
 
 ---
 
 ## 🛠️ Part 1: Codebase Walkthrough
 
-### 1. The Intelligence Layer (LangGraph)
-**File:** `/backend/graph/workflow.py`  
-**Purpose:** This is the "Central Nervous System." It defines the stateful reasoning path. Unlike simple chains, it allows the AI to cycle through memory, planning, and tool execution before responding.
+### 1. Zero-Latency Crisis Pre-filter (N0)
+**File:** `/backend/graph/nodes/crisis.py`  
+**Rationale:** Clinical safety. We use a regex-based pre-filter to ensure users in immediate danger get hotline numbers instantly, bypassing the LLM.
 
 ```python
-def create_companion_graph():
-    workflow = StateGraph(CompanionState)
-    workflow.add_node("classify", input_classifier_node)
-    workflow.add_node("retrieve_memory", memory_retrieval_node)
-    # ... other nodes ...
-    workflow.add_edge("classify", "retrieve_memory")
-    return workflow.compile()
+CRISIS_PHRASES = [r"\bwant to die\b", r"\bend my life\b", ...]
+def crisis_pre_filter(message: str):
+    # Regex scan for hard crisis phrases
+    # Returns static clinical resource response if matched
 ```
 
-### 2. Longitudinal Memory (PRISM-Lite)
-**File:** `/backend/db/prism_memory.py`  
-**Purpose:** Manages the `User Intent Vector`. It doesn't just store chat logs; it extracts **Patterns** (e.g., "sleep_difficulty") and **Outcome History** (what worked for this specific user).
+### 2. Semantic Memory & Retrieval (N2)
+**File:** `/backend/memory/prism_vector.py` and `/backend/graph/nodes/retrieval.py`  
+**Rationale:** Overcoming the keyword gap. We use **ChromaDB** to find semantically similar sessions.
 
 ```python
-async def update_pattern(user_id: str, pattern_type: str):
-    # Atomic updates to evidence count in MongoDB
-    await db.user_profiles.update_one(
-        {"user_id": user_id},
-        {"$inc": {f"active_patterns.{pattern_type}.evidence_count": 1}}
-    )
+# Retrieval logic
+semantic_memories = vector_memory.search_memories(user_id, message, n_results=3)
+# Injects previous "racing mind" context even if user now says "I'm tired"
 ```
 
-### 3. Reasoning Nodes & Tools Layer
-**Files:** `/backend/graph/nodes.py` and `/backend/tools/wellness_tools.py`  
-**Purpose:** MindMate uses a decoupled tools layer. The `recommendation_planner_node` in the graph identifies the need for action, and the `tool_execution_node` calls specific logic in the `tools/` folder. This separation allows tools to be tested independently of the AI graph.
+### 3. Computable Readiness Planner (N4)
+**File:** `/backend/graph/nodes/planner.py`  
+**Rationale:** Deterministic intervention. We move from LLM-guessing to a scored formula based on habit completion and mood trends.
 
-*   **`input_classifier_node`**: Uses Llama 3.3 to detect intent and risk.
-*   **`wellness_tools.py`**: Contains the logic for `mood_tool`, `habit_tool`, and `exercise_tool`.
-*   **`tool_execution_node`**: The bridge that translates AI recommendations into database actions.
+```python
+if len(patterns) > 0 and distress_score < 0.4:
+    rec = {"action": "soft_checkin"} # Low readiness -> Soft nudge
+elif len(patterns) > 0:
+    rec = {"action": "proactive_intervention"} # High readiness -> Specific tool
+```
 
-### 4. Proactive Scheduling
-**File:** `/backend/scheduler/checkin_scheduler.py`  
-**Purpose:** Demonstrates **Proactive Behavior**. It runs in the background using `APScheduler`, scans for abandoned habits, and triggers the AI to reach out to the user.
+### 4. Asynchronous Memory Updater (N7)
+**File:** `/backend/main.py` and `/backend/graph/nodes/updater.py`  
+**Rationale:** Performance optimization. We use **FastAPI BackgroundTasks** to update MongoDB and ChromaDB after the response is sent.
 
-### 5. Frontend Dashboard
-**File:** `/frontend/streamlit_app.py`  
-**Purpose:** Provides a "Glass Box" view. On the left is the chat; on the right is the real-time data showing the AI's internal "Pattern Bank" and Wellness stats.
+```python
+@app.post("/chat")
+async def chat(background_tasks: BackgroundTasks, ...):
+    response = await orchestrator.ainvoke(...)
+    background_tasks.add_task(async_memory_updater, user_id, result)
+    return response # User gets response 1-2s faster
+```
 
 ---
 
 ## 🎙️ Part 2: Interview Presentation Strategy
 
-When you present this to Zenark, do not just show the chat. Follow this **3-Step "Senior Engineer" Pitch**:
+### 1. The "Orchestrator" Narrative
+Don't say "I built a chatbot." Say:
+> *"I built a **Wellness Orchestrator**. The system unifies isolated data silos—mood, habits, and journals—into a central intelligence layer using a persistent state graph."*
 
-### Step 1: The Problem (The "Why")
-> "Most wellness apps have isolated modules—Mood, Habits, and Journals don't talk to each other. I built **MindMate AI** to be the 'Central Intelligence Layer' that unifies these silos using a stateful reasoning graph."
+### 2. Highlighting Clinical Safety
+Explain the layered defense:
+> *"Safety isn't an afterthought. I implemented a three-layer defense:
+> 1. A hardcoded **Regex Pre-filter** for instant crisis response.
+> 2. An **LLM-based Distress Scorer** for nuanced risk detection.
+> 3. A strictly **Non-Diagnostic Clinical Persona** node."*
 
-### Step 2: The Innovation (The "How")
-> "I implemented two proprietary concepts:
-> 1. **PRISM-Lite Memory**: A longitudinal system that tracks behavioral patterns over weeks, not just the current session.
-> 2. **Hybrid Proactivity**: The AI doesn't just wait for you to type; a background scheduler monitors your habits and triggers personalized, consent-based check-ins when it detects a drop-off."
-
-### Step 3: The Demo (The "Impact")
-1.  **Show the Dashboard**: Point out the "Detected Patterns" section.
-2.  **Trigger a Scenario**: Type *"I can't sleep again."* Show the terminal logs where the AI detects a `recurring_sleep_difficulty`.
-3.  **Show Orchestration**: Point to the **Habit Tracker** table. Type *"I want to start reading books."* Refresh the dashboard to show the AI **automatically created** a new habit in the database.
-
----
-
-## 💡 Key Talking Points (Buzzwords to Use)
-*   **"Agentic Orchestration"**: Explain that you aren't just chatting; you are orchestrating tools.
-*   **"Stateful Persistence"**: Explain how LangGraph keeps the conversation coherent.
-*   **"Non-Diagnostic Persona"**: Emphasize safety and ethics.
-*   **"Schema Normalization"**: Mention how you handle inconsistent data from different modules.
+### 3. Demonstrating "Learning"
+Point to the **Detected Patterns** in the UI:
+> *"MindMate doesn't just chat; it learns. Using **ChromaDB**, it recognizes when a user's current 'mind racing' is actually a recurrence of a sleep pattern identified two weeks ago, allowing for longitudinal support."*
 
 ---
 
-### Final Submission Checklist
-1.  Ensure `.env` is NOT uploaded to GitHub (use `.env.example`).
-2.  Include the `docs/` folder in your repository.
-3.  The `technical_explanation.md` (this file) should be in your `docs/` folder.
+## 💡 Key Terminology for your Interview
+*   **"Stateful Persistence"**: How LangGraph keeps the companion coherent.
+*   **"Semantic Recall"**: Using Vector DBs to understand meaning, not just words.
+*   **"Graceful Degradation"**: How normalization handles messy data from different modules.
+*   **"Asynchronous Consistency"**: How background tasks keep the UI fast.
